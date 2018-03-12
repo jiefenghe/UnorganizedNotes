@@ -331,3 +331,66 @@ function auth (req, res, next) {
           next();
     }
 }
+
+// User Authentication with Passport and JSON Web Token
+// Add config.js
+module.exports = {
+    'secretKey': 'some-random-key-for-security',
+    'mongoUrl' : 'mongodb://localhost:27017/someName'
+}
+
+// update authenticate.js
+var JwtStrategy = require('passport-jwt').Strategy;
+var ExtractJwt = require('passport-jwt').ExtractJwt;
+var jwt = require('jsonwebtoken'); // used to create, sign, and verify tokens
+
+var config = require('./config.js');
+
+exports.getToken = function(user) {
+    return jwt.sign(user, config.secretKey,
+        {expiresIn: 3600});
+};
+
+var options = {};
+options.jwtFromRequest = ExtractJwt.fromAuthHeaderAsBearerToken();
+options.secretOrKey = config.secretKey;
+
+exports.jwtPassport = passport.use(new JwtStrategy(options,
+    (jwt_payload, done) => {
+        console.log("JWT payload: ", jwt_payload);
+        User.findOne({_id: jwt_payload._id}, (err, user) => {
+            if (err) {
+                return done(err, false);
+            }
+            else if (user) {
+                return done(null, user);
+            }
+            else {
+                return done(null, false);
+            }
+        });
+    }));
+
+exports.verifyUser = passport.authenticate('jwt', {session: false});
+
+// updage users.js
+var authenticate = require('../authenticate');
+
+router.post('/login', passport.authenticate('local'), (req, res) => {
+
+  var token = authenticate.getToken({_id: req.user._id});
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'application/json');
+  res.json({success: true, token: token, status: 'You are successfully logged in!'});
+});
+
+// controlling routes with authentication
+var authenticate = require('../authenticate');
+
+someRouter.route('/')
+.post(authenticate.verifyUser, (req, res, next) => {
+	. . .
+})
+.put(authenticate.verifyUser, (req, res, next) => {
+ 	. . .
+})
